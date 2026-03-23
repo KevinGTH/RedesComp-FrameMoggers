@@ -29,8 +29,18 @@ Para el caso del Router, su tabla es:
 **2)** 
 En la actividad practica que tuvimos, los distintos grupos fuimos divididos o separados en diferentes nodos que estaban conectados de una determinada manera. Se decidió que 3 grupos iban a representar los routers que interactuan con el mundo exterior, mientras que cada grupo debia tener obligatoriamente su default gateway que estaba conectado a uno de esos 3 routers. 
 
+![paquetes armados](images/06.jpeg)
+
+La red que se habia armado es la que se muestra en la tablet, donde eramos parte de un grupo que era dispositivos finales.
+
 **3)** 
-Completar
+Esta es la conformacion de paquetes de nuestro grupo de parte de los 3 hosts.
+
+![3 paquetes](images/03.jpeg)
+
+Para realizar estos paquetes, cada uno de los hosts teniamos asignadas diversas direcciones IP (dependiendo del default gateway) y ademas teniamos destinos asignados.
+
+Tambien se puede observar que todos los paquetes estaban dirigidos hacia la misma direccion MAC fisica que es la AA:42:28, esta direccion es la direccion fisica del default gateway.
 
 
 **4)** 
@@ -41,6 +51,22 @@ El trabajo que debe hacer es recibir el paquete, disminuir el TTL en una unidad 
 Para los otros casos, todos los paquetes de los host fueron enviados al default gateway que lo que tenia que hacer era modificar la IP de origen, la mac de origen y de destino y posterior a esto enviarlo hacia el router que esta en el exterior. 
 
 En la practica, pudimos enviar todos los paquetes pero no recibimos ningun paquete desde el exterior hacia nuestros host.
+
+![evolucion del paquete](images/02.jpeg)
+
+Dado que uno de los destinos de un hosts de nuestra red era otro host, entonces el default gateway se puede encargar solo ruteando el paquete a la direccion IP adecuada. 
+
+En la imagen se observa como fue decrementado el metadato de TTL, y como cambió la MAC de origen y la de destino.
+
+A continuacion mostramos la otra imagen que indica el paquete de uno de los hosts que tenia de destino una IP de una red que estaba fuera de la local. En este caso el default gateway disminuyó el TTL y ademas cambió la direccion IP de origen y de destino hacia la que conocia del router central.
+
+![paquete afuera de red](images/04.jpeg)
+
+En la imagen todavia no conociamos el nombre de la MAC de destino, pero luego de acercarnos al grupo y preguntar pudimos obtenerla. En esta imagen mostramos cual era esa MAC
+
+![mac de router](images/05.jpeg)
+
+
 
 **5)** 
 Esta práctica de simulación física resultó fundamental para repasar/entender los conceptos teóricos de la arquitectura de redes al plano tangible. Si bien la teoría del modelo OSI es clara, realizar el proceso hop-by-hop manualmente nos permitió dimensionar la complejidad de las decisiones que toma un router en milisegundos. Queremos destacar especialmente el análisis de la encapsulación y desencapsulación de paquetes en cada salto asi como tambien la utilización de la mascara de subred para discriminar el trafico local del trafico remoto.
