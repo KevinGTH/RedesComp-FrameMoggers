@@ -9,6 +9,7 @@
 
 ### Desarrollo
 #### Primera Parte
+#### Repaso general didáctico: Simulación de envío de     paquetes, ARP y ruteo entre redes.
 **1)** 
 Una NIC es un componente de hardware que opera en las capas físicas y de enlace. En nuestro caso, somos 4 integrantes en el grupo en el cual 3 son Dispositivos Finales y 1 es el Router. Ya que no tenemos "NICs" se simulan asignandonos valores de MAC.
 
@@ -105,4 +106,39 @@ Esta práctica de simulación física resultó fundamental para repasar/entender
     Al decrementarse obligatoriamente en una unidad en cada router que atraviesa, el TTL asegura que la información tenga una vida útil finita; una vez que el valor alcanza el cero, el paquete es descartado automáticamente por el dispositivo que lo posee. Si este mecanismo no existiera, cualquier error de configuración generaría una acumulación exponencial de tráfico "fantasma" que nunca llegaría a su destino, consumiendo el ancho de banda y saturando la capacidad de procesamiento de los routers. 
     
     Esto provocaría eventualmente un colapso total de la red, ya que los recursos se agotarían en el transporte de datos obsoletos, impidiendo la transmisión de tráfico legítimo
+
+#### Segunda parte
+#### Inyección y detección de errores
+Para comenzar con esta parte, a los 4 grupos presentes, se nos asignó una dirección IP para poder comunicarnos entre nosotros.
+Luego se explicó las maneras de asegurar la integridad de un paquete, descartando el HASH ya que agrega demasiados datos siendo mas grande que el  PAYLOAD a transmitir. 
+
+Las técnicas explicadas en clase fueron XOR y BIT DE PARIDAD. 
+La técnica XOR consiste en aplicar la operación XOR con cada NIBBLE desde el MSB hasta completar todo el PAYLOAD, obteniendo un NIBBLE como resultado final que se almacena en el METADATA.  
+
+En la técnica de BIT DE PARIDAD  se cuentan las cantidades de 1 por cada NIBBLE, si la  cantidad  es PAR el resultado es  un  0 y si la cantidad es IMPAR el resultado es un 1 obteniendo un NIBBLE final en este caso ya que el PAYLOAD es de 2 bytes.
+
+Los datos asignados a nuestro grupo fueron:
+<center> <b> PAQUETE A ENVIAR </b> </center>
+
+IP de origen: 10.0.1.0
+IP de destino: 10.0.3.0
+Técnica: XOR
+PAYLOAD: 4dd4 (0100 1101 1101 1110)
+EDAC: 1010
+
+![imagen](images/01.jpeg)
+
+ <center> <b> PAQUETE RECIBIDO </b> </center>
+
+![imagen2](images/00.jpeg)
+IP de origen: 10.0.4.0
+IP de destino: 10.0.1.0
+Técnica: BIT DE PARIDAD
+PAYLOAD: 1010 0111 1000 0110 
+EDAC: 03H ->0000 0011  
+
+
+Si aplicamos la técnica de paridad en el PAYLOAD el resultado es: 0110 el cual no coincide con lo enviado por lo tanto el paquete fue modificado. 
+
+
 
