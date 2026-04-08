@@ -86,7 +86,7 @@ Luego de inspeccionarlo con detalle llegamos a la siguiente conclusion:
 
 1. Conectar con cables RJ-45 directos el puerto de red de las computadoras y algún puerto del switch. Ej: FastEthernet 0/1
 2. El switch no es un router. No asigna IPs. En cada PC, debemos poner IPs fijas:
-    1. En Windows: **Panel de Control > Centro de redes > Cambiar configuración del adaptador.**
+    1. En Windows: Panel de Control > Centro de redes > Cambiar configuración del adaptador.
     2. Clic derecho en "Ethernet" > Propiedades.
     3. Protocolo de Internet versión 4 (TCP/IPv4) > Propiedades.
     4. En "Usar la siguiente dirección IP" ponemos, por ejemplo: IP 192.168.1.10 Máscara 255.255.255.0
