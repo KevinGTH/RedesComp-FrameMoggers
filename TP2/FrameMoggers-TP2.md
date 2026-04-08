@@ -82,6 +82,7 @@ Luego de inspeccionarlo con detalle llegamos a la siguiente conclusion:
 ###### Conexión de computadoras al switch. Configuración de red. Testeo de conectividad.
 
 1. Conectar con cables RJ-45 directos el puerto de red de las computadoras y algún puerto del switch. Ej: FastEthernet 0/1
+    ![Puertos disponibles](images/show-ip-interface-brief.jpeg)
 2. El switch no es un router. No asigna IPs. En cada PC, debemos poner IPs fijas:
     1. En Windows: Panel de Control > Centro de redes > Cambiar configuración del adaptador.
     2. Clic derecho en "Ethernet" > Propiedades.
