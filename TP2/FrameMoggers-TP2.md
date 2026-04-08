@@ -55,9 +55,6 @@ Luego de inspeccionarlo con detalle llegamos a la siguiente conclusion:
 
 #### Parte 2: Equipamiento físico, verificación y utilización de equipos de red y análisis de tráfico.
 
-##### 1) TODO:
-
-
 ##### 2)
 ###### Conexión con PuTTY:
 
