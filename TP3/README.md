@@ -188,3 +188,23 @@ Esto también significa que el contenido es vulnerable a intervenciones. Un atac
 Como detalle adicional, al revisar los logs de nuestra consola en la VM, notamos una gran cantidad de errores 400 (Bad Request) y peticiones extrañas con caracteres en hexadecimal. Esto se debe a que, otros compañeros intentaban conectarse usando protocolos encriptados (como HTTPS) sobre nuestro puerto de texto plano, lo que genera errores de interpretación en el servidor Python.
 
 ![protocolo erroneo](images/compañeros%20se%20conectan%20al%20servidor%20python.png)
+
+
+#### 6) Video de Verisitasium
+##### a) **Relacion con TPS**
+
+La conexión fundamental entre los laboratorios y el problema planteado se centra en la manipulación de la estructura de la información. En el TP 1, cuando realizamos la inyección de errores (EDAC) modificando deliberadamente los bits del payload, aplicamos la misma lógica que se utiliza en técnicas de vulneración de dispositivos (como el caso del celular y el posnet mencionado). Al alterar los bits en tránsito, se busca aprovechar la forma en que el sistema procesa esos datos.
+
+Esta técnica cobra una relevancia crítica al considerar que puede ejecutarse sin necesidad de desbloquear el dispositivo, lo que resalta una necesidad imperativa de mecanismos que aseguren no solo la confidencialidad, sino la integridad de la información. Si el sistema no puede detectar que un bit fue alterado, la confianza en la comunicación desaparece.
+
+Esto se vincula directamente con el TP 3 y el uso de claves privadas. Mientras que en nuestras pruebas de Netcat o HTTP el mensaje era vulnerable a cambios, el uso de SSH y protocolos criptográficos modernos introduce patrones que eliminan la predictibilidad. Esto no solo oculta el mensaje, sino que protege cualquier patrón de comportamiento que un atacante pudiera usar para deducir qué se está transmitiendo o para intervenir el flujo de datos sin ser detectado.
+
+
+##### b) **Confidencialidad**
+
+Bajo el principio de confidencialidad, y analizando los resultados del laboratorio, debemos asumir que la red es un entorno hostil por definición. Como se observó en el video, el hecho de que un mensaje viaje sin una capa de autenticación (ya sea mediante claves simétricas o asimétricas) permite que un tercero modifique el payload de forma transparente, sin que el emisor o el receptor se enteren.
+
+La lección principal de nuestras capturas con Wireshark es que la seguridad no puede depender de la oscuridad del canal, sino de la robustez matemática del protocolo. En las pruebas con Netcat y HTTP, confirmamos que la falta de cifrado permite una intervención directa sobre los datos. En cambio, la implementación de claves privadas nos enseña que la confidencialidad moderna busca que la comunicación sea indistinguible del ruido aleatorio para cualquiera que no posea la llave.
+
+Por lo que nuestra conclusion es que asegurar una red implica entender que, si no hay mecanismos de integridad y cifrado activos, cualquier bit puede ser manipulado en el camino, comprometiendo la seguridad del sistema completo de manera silenciosa.
+
