@@ -12,7 +12,7 @@
 * **Nieto, Marcos**
 
 ### Consignas
-1) Reconocimiento de arquitectura.
+1) **Reconocimiento de arquitectura.**
 
 - **Firewall:** Bloquea el tráfico de tipo MALICIOUS. Evita que este tráfico basura consuma ancho de banda o sature el procesamiento de los componentes internos. Lo encontramos en la capa de red, filtra paquetes maliciosos antes de que las conexiones TCP sean aceptadas por el backend. Es un componente muy importante porque sin el el tráfico MALICIOUS entraria directamente a los balanceadores o servidores de cómputo, generando fallos masivos por sobrecarga de peticiones imprevistas, caídas críticas de reputación y un aumento considerable en el costo en reparaciones.
 
@@ -37,8 +37,12 @@
 
 - **Réplica:** Descarga de trabajo a la base de datos maestra duplicando los datos para procesar consultas exclusivas de lectura a mayor velocidad. Lo encontramos en la capa de aplicación. Si no está, la base de datos principal experimentaría una severa contención de recursos debido a la concurrencia simultánea de transacciones de escritura y consultas masivas de lectura.
 
+Adjuntamos una captura de la explicación que da el juego sobre algunos componentes.
 
-2) Tipos de tráfico.
+![tipos de componentes](images/4.png)
+
+
+2) **Tipos de tráfico.**
 
 | Tipo de tráfico | Ejemplo real | Componente recomendado para procesarlo | Riesgo si se procesa incorrectamente |
 | :--- | :--- | :--- | :--- |
@@ -53,3 +57,50 @@
 Para el tipo de tráfico STATIC en la siguiente captura podemos apreciar que si tenemos un CDN, el trafico no pasa por el compute. Sino que primero va hacia el CDN y luego al storage directamente.
 
 ![static](images/1.png)
+
+
+Adjuntamos una captura sobre la explicacion del tipo de trafico que da el juego:
+
+![tipo de trafico](images/5.png)
+
+
+3) **Testeamos las Queues.**
+
+Teniendo esta arquitectura:
+
+![primera conexion](images/2.png)
+
+![simulacion](images/3.png)
+
+Durante la simulación, al incrementar de golpe el throughput, observamos que la Queue actúa como un buffer de absorción, lo que significa que en lugar de saturar el nodo de computación y provocar la caída de conexiones, la Queue retiene el excedente de peticiones, entregándolas al nodo Compute a un ritmo que mas bajo que el nodo puede soportar. Después, al reducir el tráfico entrante a cero de forma repentina, notamos que el procesamiento no se detiene sino que el nodo de computación continúa trabajando, vaciando de manera progresiva los mensajes almacenados en la Queue de forma asíncrona. 
+
+Podemos decir que esto demuestra cómo la implementación de colas nos permite desacoplar la recepción de peticiones del procesamiento, protegiendo la infraestructura ante picos (bursts) anómalos sin perder datos.
+
+4) **Primera infraestructura mínima.**
+
+Primero viendo cada uno de los requisitos pensamos que los componentes que solucionan lo que se pide son:
+
+- Tráfico estático y uploads = El storage
+
+- Lecturas y escrituras de datos = Una base de datos SQL y para ayudarla una caché
+
+- Búsquedas = Un search engine, literalmente el nombre lo dice.
+
+- Ataques o tráfico malicioso = Un firewall que en realidad es lo que nunca debe faltar y es lo primero que debemos pensar.
+
+Obviamente para manejar la logica necesitamos un nodo de computo y ademas un balanceador de carga (tambien nos ayudamos completando los primeros niveles del modo campaña). Con respecto al balanceador de carga tambien no lo teniamos pensado poner porque ibamos a usar un solo nodo compute pero el mismo juego no nos dejaba conectar el firewall directo al nodo de computo.
+
+El resultado de lo que obtuvimos fue:
+
+![arquitectura inicial](images/6.png)
+
+El presupuesto inicial era de $2000 dolares, y inicialmente el estado de salud de todos los componentes es de 100%.
+
+Al modificar el traffic rate, claramente nos dimos cuenta de que el nodo de computo estaba saturado constantemente. Al inicio no lo pensamos y creimos que con uno solo seria suficiente (grave error). 
+
+![nodo compute saturado](images/7.png)
+
+Luego de seguir investigando un poco mas porque falló tan rapido (traffic rate de 5 req/s)logramos concluir que aunque el Firewall filtró los ataques correctamente y el Caché alivió las lecturas de la base de datos, el nodo de Compute tuvo que gestionar y mantener abierta cada conexión TCP de los usuarios. Al hacer que el tráfico STATIC pase por el servidor principal en lugar de usar un CDN (como luego nos dimos cuenta que lo dice en la campaña), obligamos al Compute a gastar sus hilos de ejecución (threads) en transferir archivos pesados hacia el Storage. Al incrementar el throughput en la simulación, las peticiones concurrentes superaron rápidamente el límite del servidor, saturando sus sockets y provocando que rechace las conexiones.
+
+Fue fundamentalmente un problema de diseño que derivó rapidamente en un colapso de capacidad. Al no desacoplar las distintas cargas, generamos un cuello de botella muy rapido en el nodo de computo.
+
