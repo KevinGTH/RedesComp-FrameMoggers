@@ -14,10 +14,42 @@
 ### Consignas
 1) Reconocimiento de arquitectura.
 
-Firewall: Bloquea requests maliciosos.
-Load Balancer: Distribuye trabajo entre unidades de cómputo disponibles usando round robin.
-Compute: Hace el procesamiento de los requests. Decide donde enviar el paquete. Ej: READ a la DB.
-Database:
-Storage: Guarda datos. Maneja tráfico UPLOAD/STATIC sin ser una carga para Compute. Si no está, no se pueden guardar datos.
-Memory Cache: Guarda respuestas en RAM. Da servicio a READs repetidos sin tocar la base de datos. Alrededor de 40% de los READs pueden ser leídos de la Cache. De no estar presente, la DB se ve sobreexigida.
-Message Queues: Introduce un búfer para manejar los picos de tráfico, para que Compute pueda procesarlos a su tiempo. Previene los request drop durante estos picos de tráfico.
+- **Firewall:** Bloquea el tráfico de tipo MALICIOUS. Evita que este tráfico basura consuma ancho de banda o sature el procesamiento de los componentes internos. Lo encontramos en la capa de red, filtra paquetes maliciosos antes de que las conexiones TCP sean aceptadas por el backend. Es un componente muy importante porque sin el el tráfico MALICIOUS entraria directamente a los balanceadores o servidores de cómputo, generando fallos masivos por sobrecarga de peticiones imprevistas, caídas críticas de reputación y un aumento considerable en el costo en reparaciones.
+
+- **Load Balancer:** Distribuye el volumen de peticiones por segundo (RPS) de forma equitativa (Round Robin) entre las instancias disponibles de procesamiento para evitar que un solo nodo se sature. Lo encontramos en la capa de transporte. Si este componente no está entonces no se podría dividir la carga de trabajo de la API. Todo el tráfico entrante se iria a un único nodo de cómputo que colapsaría instantáneamente al superar su límite de procesamiento por segundo.
+
+- **Queue:** Es un buffer de almacenamiento temporal con la capacidad para retener hasta 200 peticiones en espera, se utiliza para para que los servidores los procesen de forma asíncrona a un ritmo constante sin rechazar conexiones. Lo encontramos en la capa de aplicación. Si no está entonces el sistema pierde toda la tolerancia a picos súbitos de tráfico. Si la tasa de entrada supera por un instante la capacidad de procesamiento de los servidores, las peticiones excedentes fallarán inmediatamente degradando la reputación.
+
+- **Compute:** Es el motor de ejecución principal con costo fijo. Recibe el tráfico transaccional (READ, WRITE, SEARCH), ejecuta la lógica interna y coordina las consultas hacia las bases de datos o sistemas de caché. Lo encontramos en la capa de aplicación, ejecuta el código de backend del servidor web que interpreta el protocolo HTTP/API. Si no está, las solicitudes que requieran consultar bases de datos o lógica computacional no tendrían un entorno de ejecución de estado persistente.
+
+- **Serverless Function:** Resuelve el problema del costo de mantenimiento ocioso. En lugar de pagar un costo fijo alto por servidores activos todo el tiempo, escala automáticamente desde cero según la demanda (hasta una capacidad de 30) y cobra una tarifa por petición procesada, siendo ideal para picos aislados de tráfico. Lo encontramos en la capa de aplicación. Si no está, obligamos al sistema a depender únicamente de instancias de Compute de costo fijo, lo que causaría ineficiencia financiera si el tráfico es muy bajo o intermitente.
+
+- **SQL DB:** Centraliza el almacenamiento estructurado de datos de la API. Lo encntramos en la capa de aplicación, ya que es un servicio que procesa consultas estructuradas mediante un protocolo de base de datos específico sobre un puerto TCP dedicado. Si falta la database, las peticiones relacionales de la API fallarían por completo al no tener un motor transaccional central donde persistir datos o realizar búsquedas.
+
+- **NoSQL DB:** Optimiza el costo y la velocidad para aplicaciones de alta intensidad transaccional que no requieran relaciones complejas. Procesa el tráfico de lectura y escritura el doble de rápido que una base de datos SQL. Lo encontramos en la capa de aplicación. Si no está, todo el tráfico transaccional saturaría rápidamente la base de datos SQL principal, obligándola a procesar requests de lectura/escritura simples a mayor costo y con el doble de tiempo de respuesta.
+
+- **Caché:** Como toda memoria caché, intercepta las solicitudes antes de que lleguen a la base de datos o almacenamiento, resolviendo de forma instantánea las peticiones repetidas basándose en su hit rate, lo que reduce drásticamente la latencia y la carga de los componentes de almacenamiento. Lo encontramos en la capa de aplicación. Si falta, cada petición de lectura o archivo estático iria directamente a las bases de datos o al almacenamiento central, generando cuellos de botella por exceso de procesamiento de consultas idénticas lo cual afecta al rendimiento y aumenta los costos.
+
+- **CDN (Content Delivery Network):** Alivia a los servidores internos absorbiendo y resolviendo el tráfico de archivos estáticos en el borde de la red con una tasa de acierto en caché extremadamente alta, evitando que este tráfico de contenido consuma recursos del backend. Lo encontramos en la capa de aplicación. Si no está, todo el volumen de descargas de recursos estáticos (imágenes, CSS, JS) viajaría hasta el almacenamiento central, saturando las conexiones de red internas y ralentizando la carga general de la aplicación.
+
+- **Storage:** Proporciona un repositorio persistente y económico para guardar archivos estáticos de la web y recibir flujos de archivos pesados de los usuarios, aislando este almacenamiento de archivos del disco local de los servidores. Lo encontramos en la capa de aplicación. Si no está, no habría dónde almacenar recursos estáticos ni procesar cargas de archivos.
+
+
+- **Réplica:** Descarga de trabajo a la base de datos maestra duplicando los datos para procesar consultas exclusivas de lectura a mayor velocidad. Lo encontramos en la capa de aplicación. Si no está, la base de datos principal experimentaría una severa contención de recursos debido a la concurrencia simultánea de transacciones de escritura y consultas masivas de lectura.
+
+
+2) Tipos de tráfico.
+
+| Tipo de tráfico | Ejemplo real | Componente recomendado para procesarlo | Riesgo si se procesa incorrectamente |
+| :--- | :--- | :--- | :--- |
+| **STATIC** | El logo de la página, los archivos CSS o el código JavaScript del frontend. Son cosas pesadas pero que son exactamente iguales para todos los usuarios. | CDN en la frontera de la red, sacando los datos de un nodo de Storage (S3). | Se desperdician recursos críticos. Si ponemos al servidor principal a enviar imágenes de 5MB por cada conexión TCP, se van a mantener ocupados los hilos de ejecución y los sockets sólo mandando bytes que no aportan nada realmente a la lógica de negocio, dejando sin espacio a las transacciones reales. |
+| **READ** | Un GET a la API para cargar el perfil de un usuario o ver los últimos posteos de un foro. Es información dinámica, pero que muchos usuarios consultan una y otra vez. | Un Cache (tipo memoria RAM) en el medio y, si el dato no está ahí, consultar a una Réplica de lectura. | Saturamos la base de datos principal. Si mandamos todas las lecturas directo al nodo principal, la sobrecargamos. Las bases relacionales bloquean recursos (locks) para asegurar consistencia y si la saturamos a puras lecturas, las escrituras se traban y el rendimiento de todo el sistema disminuye. |
+| **WRITE** | Un POST procesando un pago, o un PUT actualizando una contraseña. Son datos críticos de estado que sí o sí tienen que quedar guardados y confirmados. | El Compute ejecutando la lógica de negocio y escribiendo directo (sin intermediarios) en la SQL DB o NoSQL. | Nos arriesgamos a perder información vital. Si metemos un caché en el medio de una escritura y el nodo pierde energía antes de volcar a disco, perdemos transacciones en el aire y corrompemos la consistencia del sistema. Siempre debemos mandar las escrituras al almacenamiento persistente. |
+| **UPLOAD** | Un usuario subiendo un archivo pesado, como un PDF, una imagen o un video desde su teléfono. | El Compute recibiendo la carga de red, validándola y guardándola directo en un Storage externo. | Rompemos la escalabilidad horizontal. Si guardamos esos archivos en el disco duro local de nuestro servidor de cómputo, cuando ese servidor se apague o lo reiniciemos, el archivo desaparece. Además, al procesar la subida localmente mantenemos las conexiones TCP abiertas mucho tiempo, agotando nuestros descriptores de archivos. |
+| **SEARCH** | Un usuario escribiendo en una barra de búsqueda y esperando que el sistema le devuelva resultados y filtros en milisegundos. | Un Search Engine dedicado que trabaje internamente con índices invertidos. | Destruimos el rendimiento del motor relacional. Si hacemos un LIKE %atributo% en una base de datos normal, generamos un escaneo secuencial masivo de toda la tabla. Esto nos consume toda la CPU y la RAM de la base, tirando abajo el servicio para el resto de los usuarios. |
+| **MALICIOUS** | Una botnet haciéndonos un SYN flood o mandándonos peticiones basura para voltear el sistema. | Un Firewall posicionado bien al frente de todo el perímetro de la red. | Dejamos que el sistema colapse solo. Si permitimos que esos paquetes lleguen a nuestros servidores, el sistema operativo va a intentar asignarles recursos (memoria, sockets, hilos) a peticiones que son pura basura. Nos quedamos sin recursos de red al instante y nuestros usuarios reales van a empezar a recibir Timeouts o conexiones rechazadas. |
+
+
+Para el tipo de tráfico STATIC en la siguiente captura podemos apreciar que si tenemos un CDN, el trafico no pasa por el compute. Sino que primero va hacia el CDN y luego al storage directamente.
+
+![static](images/1.png)
