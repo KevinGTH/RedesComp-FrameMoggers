@@ -72,7 +72,7 @@ Teniendo esta arquitectura:
 
 ![simulacion](images/3.png)
 
-Durante la simulación, al incrementar de golpe el throughput, observamos que la Queue actúa como un buffer de absorción, lo que significa que en lugar de saturar el nodo de computación y provocar la caída de conexiones, la Queue retiene el excedente de peticiones, entregándolas al nodo Compute a un ritmo que mas bajo que el nodo puede soportar. Después, al reducir el tráfico entrante a cero de forma repentina, notamos que el procesamiento no se detiene sino que el nodo de computación continúa trabajando, vaciando de manera progresiva los mensajes almacenados en la Queue de forma asíncrona. 
+Durante la simulación, al incrementar súbitamente el throughput, observamos que la Queue actúa como un buffer de absorción, lo que significa que en lugar de saturar el nodo de computación y provocar la caída de conexiones, la Queue retiene el excedente de peticiones, entregándolas al nodo Compute a un ritmo más bajo que el nodo puede soportar. Después, al reducir el tráfico entrante a cero de forma repentina, notamos que el procesamiento no se detiene sino que el nodo de computación continúa trabajando, vaciando de manera progresiva los mensajes almacenados en la Queue de forma asíncrona. 
 
 Podemos decir que esto demuestra cómo la implementación de colas nos permite desacoplar la recepción de peticiones del procesamiento, protegiendo la infraestructura ante picos (bursts) anómalos sin perder datos.
 
@@ -80,46 +80,46 @@ Podemos decir que esto demuestra cómo la implementación de colas nos permite d
 
 Primero viendo cada uno de los requisitos pensamos que los componentes que solucionan lo que se pide son:
 
-- Tráfico estático y uploads = El storage
+- Tráfico estático y uploads = El storage.
 
-- Lecturas y escrituras de datos = Una base de datos SQL y para ayudarla una caché
+- Lecturas y escrituras de datos = Una base de datos SQL y para ayudarla una caché.
 
-- Búsquedas = Un search engine, literalmente el nombre lo dice.
+- Búsquedas = Un motor de búsquedas.
 
 - Ataques o tráfico malicioso = Un firewall que en realidad es lo que nunca debe faltar y es lo primero que debemos pensar.
 
-Obviamente para manejar la logica necesitamos un nodo de computo y ademas un balanceador de carga (tambien nos ayudamos completando los primeros niveles del modo campaña). Con respecto al balanceador de carga tambien no lo teniamos pensado poner porque ibamos a usar un solo nodo compute pero el mismo juego no nos dejaba conectar el firewall directo al nodo de computo.
+Obviamente para manejar la lógica necesitamos un nodo de cómputo y ademas un balanceador de carga (tambien nos ayudamos completando los primeros niveles del modo campaña). Con respecto al balanceador de carga, habíamos pensado en obviarlo porque íbamos a usar un solo nodo compute pero el mismo juego no nos dejaba conectar el firewall directo al nodo de cómputo.
 
 El resultado de lo que obtuvimos fue:
 
 ![arquitectura inicial](images/6.png)
 
-El presupuesto inicial era de $2000 dolares, y inicialmente el estado de salud de todos los componentes es de 100%.
+El presupuesto inicial era de $2000 dólares, e inicialmente el estado de salud de todos los componentes es del 100%.
 
-Al modificar el traffic rate, claramente nos dimos cuenta de que el nodo de computo estaba saturado constantemente. Al inicio no lo pensamos y creimos que con uno solo seria suficiente (grave error). 
+Al modificar el traffic rate, claramente nos dimos cuenta de que el nodo de cómputo estaba saturado constantemente. Al inicio no lo pensamos y creímos que con uno solo sería suficiente, lo cual resultó ser un grave error. 
 
 ![nodo compute saturado](images/7.png)
 
-Luego de seguir investigando un poco mas porque falló tan rapido (traffic rate de 5 req/s)logramos concluir que aunque el Firewall filtró los ataques correctamente y el Caché alivió las lecturas de la base de datos, el nodo de Compute tuvo que gestionar y mantener abierta cada conexión TCP de los usuarios. Al hacer que el tráfico STATIC pase por el servidor principal en lugar de usar un CDN (como luego nos dimos cuenta que lo dice en la campaña), obligamos al Compute a gastar sus hilos de ejecución (threads) en transferir archivos pesados hacia el Storage. Al incrementar el throughput en la simulación, las peticiones concurrentes superaron rápidamente el límite del servidor, saturando sus sockets y provocando que rechace las conexiones.
+Luego de seguir investigando un poco mas porque falló tan rapido (traffic rate de 5 req/s) logramos concluir que aunque el Firewall filtró los ataques correctamente y el Caché alivió las lecturas de la base de datos, el nodo de Compute tuvo que gestionar y mantener abierta cada conexión TCP de los usuarios. Al hacer que el tráfico STATIC pase por el servidor principal en lugar de usar un CDN (como luego nos dimos cuenta que dice la campaña), obligamos al Compute a gastar sus hilos de ejecución (threads) en transferir archivos pesados hacia el Storage. Al incrementar el throughput en la simulación, las peticiones concurrentes superaron rápidamente el límite del servidor, saturando sus sockets y provocando que rechace las conexiones.
 
-Fue fundamentalmente un problema de diseño que derivó rapidamente en un colapso de capacidad. Al no desacoplar las distintas cargas, generamos un cuello de botella muy rapido en el nodo de computo.
+Fue fundamentalmente un problema de diseño que derivó rapidamente en un colapso de capacidad. Al no desacoplar las distintas cargas, generamos un cuello de botella muy rápido en el nodo de cómputo.
 
 5) **Escalabilidad y balanceo**
 
-La primer estrategia que vamos a probar es aumentar la capacidad de computo agregando mas nodos. Y el load balancer es el que va a distribuir la carga entre los 3 nodos.
+La primer estrategia que vamos a probar es aumentar la capacidad de cómputo agregando más nodos. Y el load balancer es el que va a distribuir la carga entre los 3 nodos.
 
 ![3 nodos de compute](images/8.png)
 
-Aqui notamos el tipo de trafico que mas se perdió fué el de WR-write. Basicamente porque aunque triplicamos la cantidad de nodos de computo la cantidad de nodos de bases de datos sql que ademas de no ser la mas rapida para operaciones de lectura/escritura, entonces ahi esta el principal problema. En este caso escalar solo en el sentido de aumentar la cantidad de nodos de computo mejora un poco la situación pero no es escalable de ninguna manera, en esta priemera modificacion el problema sigue siendo totalmente estructural.
+Aquí notamos el tipo de tráfico que mas se perdió fué el de WR-write. Básicamente, aunque triplicamos la cantidad de nodos de cómputo la cantidad de nodos de bases de datos sql que, además de no ser la mas rapida para operaciones de lectura/escritura, se mantuvo constante. He ahí el principal problema. En este caso escalar solo en el sentido de aumentar la cantidad de nodos de cómputo mejora un poco la situación pero no es escalable de ninguna manera, en esta primera modificación el problema sigue siendo totalmente estructural.
 
 
-Ahora vamos a no solo incrementar la capacidad de computo sino que tambien agregar mas caché y separar los servicios por el tipo de tráfico. Hacemos esto usando los componentes que son superiores en velocidad y asi no dejamos que la base de datos sql haga todo aunque sea lento.
+Ahora en adición a incrementar la capacidad de cómputo agregaremos mas caché y separaremos los servicios por el tipo de tráfico. Hacemos esto usando los componentes que son superiores en velocidad y asi evitamos que la base de datos sql haga todo aunque sea lento.
 
 ![separando servicios](images/9.png)
 
-Aun aqui vemos que los nodos no pueden soportar por lo que los vamos a upgradear para que se aumente su capacidad de carga. Con el upgrade todo mejora muchisimo y aunque los tipos de trafico que mas perdemos son los STATIC es porque no tenemos un CDN en la arquitectura. El tráfico STATIC pasa por el Compute antes de llegar al Storage, saturando innecesariamente los nodos de cómputo con requests que podrían resolverse directamente desde el borde sin tocar el backend.
+Aun aquí vemos que los nodos no pueden soportar el tráfico, por lo que los vamos a upgradear para que aumente su capacidad de carga. Con el upgrade conseguimos una mejora notable. Vale notar que perdemos tráfico STATIC porque no tenemos un CDN en la arquitectura. El tráfico STATIC pasa por el Compute antes de llegar al Storage, saturando innecesariamente los nodos de cómputo con requests que podrían resolverse directamente desde el borde sin tocar el backend.
 
-Pero con esta arquitectura veo que sí escalaría horizontalmente porque cada componente tiene una responsabilidad específica según el tipo de tráfico osea que agregar más nodos Compute, más réplicas de NoSQL o más instancias de Search no afecta a los demás servicios, lo que permite escalar cada capa de forma independiente según cuál sea el cuello de botella en cada momento.
+Pero con esta arquitectura vemos que sí escalaría horizontalmente, porque cada componente tiene una responsabilidad específica según el tipo de tráfico, es decir que agregar más nodos Compute, más réplicas de NoSQL o más instancias de Search no afecta a los demás servicios, lo que permite escalar cada capa de forma independiente según cuál sea el cuello de botella en cada momento.
 
 
 6) **Sobrevivir**
