@@ -104,3 +104,49 @@ Luego de seguir investigando un poco mas porque falló tan rapido (traffic rate 
 
 Fue fundamentalmente un problema de diseño que derivó rapidamente en un colapso de capacidad. Al no desacoplar las distintas cargas, generamos un cuello de botella muy rapido en el nodo de computo.
 
+5) **Escalabilidad y balanceo**
+
+La primer estrategia que vamos a probar es aumentar la capacidad de computo agregando mas nodos. Y el load balancer es el que va a distribuir la carga entre los 3 nodos.
+
+![3 nodos de compute](images/8.png)
+
+Aqui notamos el tipo de trafico que mas se perdió fué el de WR-write. Basicamente porque aunque triplicamos la cantidad de nodos de computo la cantidad de nodos de bases de datos sql que ademas de no ser la mas rapida para operaciones de lectura/escritura, entonces ahi esta el principal problema. En este caso escalar solo en el sentido de aumentar la cantidad de nodos de computo mejora un poco la situación pero no es escalable de ninguna manera, en esta priemera modificacion el problema sigue siendo totalmente estructural.
+
+
+Ahora vamos a no solo incrementar la capacidad de computo sino que tambien agregar mas caché y separar los servicios por el tipo de tráfico. Hacemos esto usando los componentes que son superiores en velocidad y asi no dejamos que la base de datos sql haga todo aunque sea lento.
+
+![separando servicios](images/9.png)
+
+Aun aqui vemos que los nodos no pueden soportar por lo que los vamos a upgradear para que se aumente su capacidad de carga. Con el upgrade todo mejora muchisimo y aunque los tipos de trafico que mas perdemos son los STATIC es porque no tenemos un CDN en la arquitectura. El tráfico STATIC pasa por el Compute antes de llegar al Storage, saturando innecesariamente los nodos de cómputo con requests que podrían resolverse directamente desde el borde sin tocar el backend.
+
+Pero con esta arquitectura veo que sí escalaría horizontalmente porque cada componente tiene una responsabilidad específica según el tipo de tráfico osea que agregar más nodos Compute, más réplicas de NoSQL o más instancias de Search no afecta a los demás servicios, lo que permite escalar cada capa de forma independiente según cuál sea el cuello de botella en cada momento.
+
+
+6) **Sobrevivir**
+
+![1M de puntos](images/11.png)
+
+Lo primero que aprendimos es que arrancar con todo desde el inicio no funciona, el upkeep te come el budget antes de que generemos ingresos suficientes. La estrategia que terminó funcionando fue empezar simple e ir agregando componentes a medida que el sistema los pedía.
+
+Los componentes que usamos y por qué los elegimos:
+- **Firewall (WAF):** el primero en la cadena, imprescindible para bloquear todo el tráfico MALICIOUS antes de que entre al sistema y dañe la reputación.
+- **Load Balancer (ALB):** distribuye el tráfico entre los nodos de Compute con round-robin, sin él un solo Compute recibe todo y se satura rápido.
+- **Compute:** el corazón de la arquitectura, procesa todos los requests y los rutea al destino correcto según el tipo de tráfico.
+- **SQL DB:** destino principal para tráfico READ, WRITE y SEARCH. Fue el primer cuello de botella que apareció, cuando el tráfico creció, el SQL era el que primero se ponía rojo porque recibía todo.
+- **Cache:** agregada cuando el READ empezó a saturar el SQL. Intercepta los READ repetidos y evita que lleguen a la base de datos, reduciendo muchísimo la carga.
+- **NoSQL:** sumada cuando los WRITE seguían saturando el SQL incluso con Cache. El Compute automáticamente manda los WRITE al NoSQL, que es más rápido para ese tipo de operación.
+- **Storage:** para atender el tráfico UPLOAD y STATIC sin que pase por el SQL ni el Compute más de lo necesario.
+- **CDN:** conectado directamente al Storage durante toda la partida, se encargó de servir el tráfico STATIC desde el borde sin tocar el backend, reduciendo la carga en los Computes.
+- **Search Engine:** agregado cuando el tráfico SEARCH empezó a fallar. Más eficiente que dejar que el SQL maneje esas consultas.
+
+Lo mas importante y aunque evidente fue aprender a leer bien y a poner pause/continue dependiendo del tipo de ataque que llegaba, cuando un nodo empezaba a mostrarse rojo o cuando el panel de failures mostraba que un tipo de tráfico específico estaba subiendo, ahí pausábamos y agregábamos exactamente lo que hacía falta. UPLOAD fallando → Storage. SEARCH fallando → Search Engine. READ saturado → upgrade de Cache. Luego veíamos si debíamos mantenerlo o quitarlo.
+
+Con el tema de los spikes o picos de datos, al principio las técnicas que usábamos era agregar una queue pero realmente para nosotros fue muy difícil de manejar porque si la dejábamos mucho tiempo como son demasiado lentas, bajaba muchísimo la reputación y terminábamos perdiendo mucho más rápido. Decidimos no usarlos y simplemente agregar más módulos de nodos de Compute cuando hacía falta.
+
+También aprendimos que siempre conviene upgradear un nodo antes de agregar uno nuevo, porque cada nodo nuevo suma upkeep fijo. Y ante eventos como el Cloud Cost Spike, la respuesta fue sacar temporalmente lo más caro y menos crítico para no quedarse sin budget. Generalmente lo que menos subía salvo por ciertas cosas eran los Search.
+
+Si tuviéramos más presupuesto, escalaríamos principalmente los nodos de Compute y la Cache, que fueron los que más veces necesitamos upgradear a lo largo de la partida.
+
+Con esa misma lógica escalamos la arquitectura de manera horizontal y creemos que si queríamos podríamos haber seguido mucho más.
+
+![record](images/12.png)
